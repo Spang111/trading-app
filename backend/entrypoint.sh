@@ -63,7 +63,7 @@ fi
 # ================================
 # 3. 启动服务（带 debug 信息）
 # ================================
-PORT="${PORT:-8000}"
+PORT="${PORT:-8080}"
 WEB_CONCURRENCY="${WEB_CONCURRENCY:-2}"
 
 echo "[entrypoint] 🌐 Starting API on port ${PORT}..."
