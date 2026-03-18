@@ -1,0 +1,25 @@
+# Python / tooling
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+
+# Virtualenvs
+.venv/
+venv/
+
+# Local env files (never bake secrets into images)
+.env
+.env.*
+
+# VCS
+.git/
+.gitignore
+
+# Tests are not needed in production images
+tests/
+
