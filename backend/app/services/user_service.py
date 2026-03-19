@@ -87,6 +87,12 @@ class UserService:
         await self.db.refresh(user)
         return user
 
+    async def set_password(self, user: User, password: str) -> User:
+        user.password_hash = hash_password(password)
+        await self.db.flush()
+        await self.db.refresh(user)
+        return user
+
     async def get_all(self, skip: int = 0, limit: int = 100) -> List[User]:
         result = await self.db.execute(select(User).offset(skip).limit(limit))
         return list(result.scalars().all())

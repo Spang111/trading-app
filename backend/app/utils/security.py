@@ -16,6 +16,7 @@ from app.config import settings
 
 ACCESS_TOKEN_PURPOSE = "access"
 EMAIL_VERIFICATION_PURPOSE = "verify_email"
+PASSWORD_RESET_PURPOSE = "reset_password"
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -38,6 +39,10 @@ def _build_expiry(expires_delta: Optional[timedelta], fallback_minutes: int) -> 
     if expires_delta is not None:
         return datetime.now(timezone.utc) + expires_delta
     return datetime.now(timezone.utc) + timedelta(minutes=fallback_minutes)
+
+
+def _password_fingerprint(password_hash: str) -> str:
+    return hashlib.sha256(password_hash.encode()).hexdigest()
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -95,6 +100,50 @@ def decode_email_verification_token(token: str) -> Optional[dict]:
         return None
 
     return payload
+
+
+def create_password_reset_token(
+    *,
+    user_id: int,
+    email: str,
+    password_hash: str,
+    expires_delta: Optional[timedelta] = None,
+) -> str:
+    payload = {
+        "sub": email,
+        "user_id": user_id,
+        "purpose": PASSWORD_RESET_PURPOSE,
+        "pwd": _password_fingerprint(password_hash),
+        "exp": _build_expiry(
+            expires_delta,
+            settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
+        ),
+    }
+    return jwt.encode(
+        payload,
+        settings.password_reset_token_secret,
+        algorithm=settings.ALGORITHM,
+    )
+
+
+def decode_password_reset_token(token: str) -> Optional[dict]:
+    try:
+        payload = jwt.decode(
+            token,
+            settings.password_reset_token_secret,
+            algorithms=[settings.ALGORITHM],
+        )
+    except JWTError:
+        return None
+
+    if payload.get("purpose") != PASSWORD_RESET_PURPOSE:
+        return None
+
+    return payload
+
+
+def matches_password_reset_fingerprint(token_payload: dict, password_hash: str) -> bool:
+    return token_payload.get("pwd") == _password_fingerprint(password_hash)
 
 
 def encrypt_api_key(api_key: str) -> str:

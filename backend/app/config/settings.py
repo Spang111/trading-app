@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     # JWT (required)
     SECRET_KEY: str = Field(min_length=1)
     EMAIL_TOKEN_SECRET: Optional[str] = None
+    PASSWORD_RESET_TOKEN_SECRET: Optional[str] = None
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
@@ -100,6 +101,7 @@ class Settings(BaseSettings):
     EMAIL_VERIFICATION_REQUIRED: bool = False
     EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS: int = 60
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
     SMTP_HOST: Optional[str] = None
     SMTP_PORT: int = 587
     SMTP_USERNAME: Optional[str] = None
@@ -195,6 +197,10 @@ class Settings(BaseSettings):
     @property
     def email_token_secret(self) -> str:
         return (self.EMAIL_TOKEN_SECRET or self.SECRET_KEY).strip()
+
+    @property
+    def password_reset_token_secret(self) -> str:
+        return (self.PASSWORD_RESET_TOKEN_SECRET or self.email_token_secret).strip()
 
     @property
     def smtp_from_name(self) -> str:

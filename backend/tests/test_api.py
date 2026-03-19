@@ -19,7 +19,13 @@ from app.main import create_app
 from app.models.strategy import Strategy
 from app.models.user import User, UserRole, UserStatus
 from app.services.email_verification_service import EmailVerificationService
-from app.utils.security import create_email_verification_token, hash_password
+from app.services.password_reset_service import PasswordResetService
+from app.utils.security import (
+    create_email_verification_token,
+    create_password_reset_token,
+    hash_password,
+    verify_password,
+)
 
 
 @pytest.fixture(scope="session")
@@ -228,6 +234,79 @@ async def test_verify_email(client, db_session, email_verification_enabled):
     await db_session.refresh(user)
     assert user.email_verified is True
     assert user.email_verified_at is not None
+
+
+@pytest.mark.asyncio
+async def test_forgot_password_sends_email(client, db_session, monkeypatch):
+    username = f"user_{uuid4().hex[:8]}"
+    email = f"{username}@example.com"
+
+    user = User(
+        username=username,
+        email=email,
+        password_hash=hash_password("pass12345"),
+        role=UserRole.USER,
+        is_admin=False,
+        status=UserStatus.ACTIVE,
+        email_verified=True,
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    sent = {"count": 0}
+
+    async def fake_send_password_reset_email(self, *, user, request=None):
+        sent["count"] += 1
+        return "fake-reset-token"
+
+    monkeypatch.setattr(
+        PasswordResetService,
+        "send_password_reset_email",
+        fake_send_password_reset_email,
+    )
+
+    response = await client.post("/api/auth/forgot-password", json={"email": email})
+    assert response.status_code == 200
+    assert response.json()["message"] == (
+        "If that email address exists, a password reset link will arrive shortly."
+    )
+    assert sent["count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_reset_password(client, db_session):
+    username = f"user_{uuid4().hex[:8]}"
+    email = f"{username}@example.com"
+    old_password = "pass12345"
+    new_password = "newpass123"
+
+    user = User(
+        username=username,
+        email=email,
+        password_hash=hash_password(old_password),
+        role=UserRole.USER,
+        is_admin=False,
+        status=UserStatus.ACTIVE,
+        email_verified=True,
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    token = create_password_reset_token(
+        user_id=user.id,
+        email=user.email,
+        password_hash=user.password_hash,
+    )
+
+    response = await client.post(
+        "/api/auth/reset-password",
+        json={"token": token, "new_password": new_password},
+    )
+    assert response.status_code == 200
+    assert response.json()["message"] == "Password reset successful. You can log in now."
+
+    await db_session.refresh(user)
+    assert verify_password(new_password, user.password_hash)
 
 
 @pytest.mark.asyncio
