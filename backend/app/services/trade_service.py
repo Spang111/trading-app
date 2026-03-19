@@ -55,6 +55,57 @@ def _with_proxy(config: Dict[str, Any]) -> Dict[str, Any]:
     return config
 
 
+async def _close_exchange(exchange: Optional[ccxt.Exchange]) -> None:
+    if exchange is None:
+        return
+
+    try:
+        await exchange.close()
+    except Exception as exc:
+        logger.debug(
+            "[exchange-close] exchange=%s failed: %s",
+            getattr(exchange, "id", "unknown"),
+            exc,
+        )
+
+
+def _warmup_default_type(exchange_id: str) -> str:
+    if exchange_id == "binance":
+        return "future"
+    return "swap"
+
+
+def _select_derivative_markets(
+    exchange: ccxt.Exchange,
+    symbol_filter: Optional[set[str]] = None,
+) -> Dict[str, Dict[str, Any]]:
+    markets = getattr(exchange, "markets", {}) or {}
+    selected: Dict[str, Dict[str, Any]] = {}
+
+    for symbol, market in markets.items():
+        if not symbol or not isinstance(market, dict):
+            continue
+        if market.get("active") is False:
+            continue
+
+        market_type = str(market.get("type") or "").lower()
+        is_derivative = bool(
+            market.get("swap")
+            or market.get("future")
+            or market.get("contract")
+            or market_type in {"swap", "future"}
+        )
+        if not is_derivative:
+            continue
+
+        if symbol_filter and symbol not in symbol_filter:
+            continue
+
+        selected[symbol] = market
+
+    return selected
+
+
 def cache_exchange_markets(
     exchange_id: str,
     markets: Dict[str, Any],
@@ -85,34 +136,43 @@ async def warmup_exchange_markets(exchange_ids: List[str]) -> None:
 
         exchange_class = getattr(ccxt, exchange_id)
         exchange_config = {"enableRateLimit": True, "timeout": 30000}
-        exchange = exchange_class(_with_proxy(exchange_config))
+        exchange: Optional[ccxt.Exchange] = exchange_class(_with_proxy(exchange_config))
         try:
-            exchange.options["defaultType"] = "swap"
-            markets_list = await exchange.fetch_markets({"type": "swap"})
-            symbol_filter = set(settings.MONITOR_SYMBOLS or [])
-            if symbol_filter:
-                markets_list = [
-                    market
-                    for market in markets_list
-                    if market.get("symbol") in symbol_filter
-                ]
+            exchange.options["defaultType"] = _warmup_default_type(exchange_id)
+            await exchange.load_markets(reload=True)
 
-            markets = {
-                market["symbol"]: market
-                for market in markets_list
-                if market.get("symbol")
+            monitored_symbols = {
+                str(symbol).strip()
+                for symbol in (settings.MONITOR_SYMBOLS or [])
+                if str(symbol).strip()
             }
+            derivative_markets = _select_derivative_markets(exchange)
+            markets = _select_derivative_markets(exchange, symbol_filter=monitored_symbols)
+
+            if monitored_symbols and not markets and derivative_markets:
+                logger.warning(
+                    "[warmup] exchange=%s monitor symbols not found; caching all derivative markets instead",
+                    exchange_id,
+                )
+                markets = derivative_markets
+            elif not monitored_symbols:
+                markets = derivative_markets
+
+            if not markets:
+                logger.warning("[warmup] exchange=%s loaded no derivative markets", exchange_id)
+                continue
+
             cache_exchange_markets(
                 exchange_id,
                 markets=markets,
-                markets_by_id={m.get("id"): m for m in markets_list if m.get("id")},
+                markets_by_id={m.get("id"): m for m in markets.values() if m.get("id")},
                 symbols=list(markets.keys()),
                 currencies=getattr(exchange, "currencies", None),
             )
         except Exception as exc:
             logger.warning("[warmup] exchange=%s failed: %s", exchange_id, exc)
         finally:
-            await exchange.close()
+            await _close_exchange(exchange)
 
 
 def _apply_market_cache(exchange_id: str, exchange: ccxt.Exchange) -> None:
@@ -414,7 +474,7 @@ async def _execute_order_for_user(
             "error": str(exc),
         }
     finally:
-        await exchange.close()
+        await _close_exchange(exchange)
 
 
 async def _save_execution_results(

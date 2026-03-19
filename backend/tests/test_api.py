@@ -20,6 +20,7 @@ from app.models.strategy import Strategy
 from app.models.user import User, UserRole, UserStatus
 from app.services.email_verification_service import EmailVerificationService
 from app.services.password_reset_service import PasswordResetService
+from app.services.trade_service import _select_derivative_markets
 from app.utils.security import (
     create_email_verification_token,
     create_password_reset_token,
@@ -307,6 +308,43 @@ async def test_reset_password(client, db_session):
 
     await db_session.refresh(user)
     assert verify_password(new_password, user.password_hash)
+
+
+def test_select_derivative_markets_filters_symbols():
+    class FakeExchange:
+        markets = {
+            "BTC/USDT:USDT": {
+                "symbol": "BTC/USDT:USDT",
+                "swap": True,
+                "active": True,
+                "id": "BTCUSDT",
+            },
+            "ETH/USDT:USDT": {
+                "symbol": "ETH/USDT:USDT",
+                "future": True,
+                "active": True,
+                "id": "ETHUSDT",
+            },
+            "BTC/USDT": {
+                "symbol": "BTC/USDT",
+                "spot": True,
+                "active": True,
+                "id": "BTCUSDT_SPOT",
+            },
+            "DOGE/USDT:USDT": {
+                "symbol": "DOGE/USDT:USDT",
+                "swap": True,
+                "active": False,
+                "id": "DOGEUSDT",
+            },
+        }
+
+    selected = _select_derivative_markets(
+        FakeExchange(),
+        symbol_filter={"BTC/USDT:USDT", "DOGE/USDT:USDT"},
+    )
+
+    assert list(selected.keys()) == ["BTC/USDT:USDT"]
 
 
 @pytest.mark.asyncio
