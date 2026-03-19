@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 # Global exchange market cache (filled at app startup)
 EXCHANGE_MARKETS_CACHE: Dict[str, Dict[str, Any]] = {}
+EXCHANGE_WARMUP_LOCKS: Dict[str, asyncio.Lock] = {}
 
 # Concurrency limiter for order placement
 ORDER_SEMAPHORE = asyncio.Semaphore(5)
@@ -67,6 +68,14 @@ async def _close_exchange(exchange: Optional[ccxt.Exchange]) -> None:
             getattr(exchange, "id", "unknown"),
             exc,
         )
+
+
+def _get_exchange_warmup_lock(exchange_id: str) -> asyncio.Lock:
+    lock = EXCHANGE_WARMUP_LOCKS.get(exchange_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        EXCHANGE_WARMUP_LOCKS[exchange_id] = lock
+    return lock
 
 
 def _warmup_default_type(exchange_id: str) -> str:
@@ -129,10 +138,21 @@ def cache_exchange_markets(
 async def warmup_exchange_markets(exchange_ids: List[str]) -> None:
     for exchange_id in exchange_ids:
         exchange_id = exchange_id.strip().lower()
-        if not exchange_id:
-            continue
-        if not hasattr(ccxt, exchange_id):
-            continue
+        await _warmup_exchange(exchange_id)
+
+
+async def _warmup_exchange(exchange_id: str) -> bool:
+    exchange_id = exchange_id.strip().lower()
+    if not exchange_id:
+        return False
+    if not hasattr(ccxt, exchange_id):
+        logger.warning("[warmup] exchange=%s is not supported by ccxt", exchange_id)
+        return False
+
+    lock = _get_exchange_warmup_lock(exchange_id)
+    async with lock:
+        if EXCHANGE_MARKETS_CACHE.get(exchange_id):
+            return True
 
         exchange_class = getattr(ccxt, exchange_id)
         exchange_config = {"enableRateLimit": True, "timeout": 30000}
@@ -160,7 +180,7 @@ async def warmup_exchange_markets(exchange_ids: List[str]) -> None:
 
             if not markets:
                 logger.warning("[warmup] exchange=%s loaded no derivative markets", exchange_id)
-                continue
+                return False
 
             cache_exchange_markets(
                 exchange_id,
@@ -169,8 +189,11 @@ async def warmup_exchange_markets(exchange_ids: List[str]) -> None:
                 symbols=list(markets.keys()),
                 currencies=getattr(exchange, "currencies", None),
             )
+            logger.info("[warmup] exchange=%s cached %d derivative markets", exchange_id, len(markets))
+            return True
         except Exception as exc:
             logger.warning("[warmup] exchange=%s failed: %s", exchange_id, exc)
+            return False
         finally:
             await _close_exchange(exchange)
 
@@ -411,6 +434,8 @@ async def _execute_order_for_user(
     exchange = exchange_class(params)
     try:
         # Apply preloaded markets to avoid load_markets in the order path
+        if exchange_id not in EXCHANGE_MARKETS_CACHE:
+            await _warmup_exchange(exchange_id)
         if exchange_id not in EXCHANGE_MARKETS_CACHE:
             return {
                 "user_id": user_id,

@@ -26,13 +26,22 @@ async def lifespan(app: FastAPI):
     if settings.DEBUG:
         await init_db()
 
-    # Warm up exchange markets cache (required for precision rounding)
-    await warmup_exchange_markets(settings.exchange_cache_list)
+    # Warm up exchange markets cache in the background so Cloud Run can
+    # serve health checks quickly during cold starts.
+    exchange_ids = settings.exchange_cache_list
+    task_manager: TaskManager | None = getattr(app.state, "task_manager", None)
+    if exchange_ids and task_manager is not None:
+        task_manager.create_task(
+            warmup_exchange_markets(exchange_ids),
+            name="exchange-market-warmup",
+        )
+    elif exchange_ids:
+        await warmup_exchange_markets(exchange_ids)
 
     yield
 
     # Graceful shutdown: stop background tasks then dispose DB connections.
-    task_manager: TaskManager | None = getattr(app.state, "task_manager", None)
+    task_manager = getattr(app.state, "task_manager", None)
     if task_manager is not None:
         await task_manager.shutdown(
             timeout_seconds=float(settings.BACKGROUND_TASK_SHUTDOWN_TIMEOUT_SECONDS or 10.0)
