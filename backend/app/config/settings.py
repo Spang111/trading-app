@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     # App
     APP_NAME: str = "QuantFlow API"
     APP_VERSION: str = "1.0.0"
+    BACKEND_PUBLIC_URL: Optional[AnyHttpUrl] = None
+    FRONTEND_APP_URL: Optional[AnyHttpUrl] = None
 
     # Debug / logging
     DEBUG: Optional[bool] = None
@@ -56,6 +58,7 @@ class Settings(BaseSettings):
 
     # JWT (required)
     SECRET_KEY: str = Field(min_length=1)
+    EMAIL_TOKEN_SECRET: Optional[str] = None
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
@@ -92,6 +95,19 @@ class Settings(BaseSettings):
 
     # Encryption key for API credentials (optional; kept for future use)
     ENCRYPTION_KEY: Optional[str] = None
+
+    # Email verification / SMTP
+    EMAIL_VERIFICATION_REQUIRED: bool = False
+    EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+    EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS: int = 60
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM_EMAIL: Optional[str] = None
+    SMTP_FROM_NAME: Optional[str] = None
+    SMTP_USE_TLS: bool = True
+    SMTP_USE_SSL: bool = False
 
     # CORS: supports env var as JSON list or comma-separated string.
     BACKEND_CORS_ORIGINS: Annotated[List[AnyHttpUrl], Json()] = Field(
@@ -130,6 +146,17 @@ class Settings(BaseSettings):
         if self.LOG_LEVEL is None:
             self.LOG_LEVEL = "DEBUG" if self.DEBUG else "INFO"
 
+        if self.SMTP_USE_TLS and self.SMTP_USE_SSL:
+            raise ValueError("SMTP_USE_TLS and SMTP_USE_SSL cannot both be True.")
+
+        if self.EMAIL_VERIFICATION_REQUIRED:
+            if not self.SMTP_HOST:
+                raise ValueError("SMTP_HOST is required when EMAIL_VERIFICATION_REQUIRED=True.")
+            if not self.SMTP_FROM_EMAIL:
+                raise ValueError(
+                    "SMTP_FROM_EMAIL is required when EMAIL_VERIFICATION_REQUIRED=True."
+                )
+
         if self.ENV == "production":
             if self.DEBUG:
                 raise ValueError("DEBUG must be False when ENV=production.")
@@ -164,6 +191,14 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> List[str]:
         # Backward-compatible helper for CORSMiddleware (no trailing slash).
         return [str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS]
+
+    @property
+    def email_token_secret(self) -> str:
+        return (self.EMAIL_TOKEN_SECRET or self.SECRET_KEY).strip()
+
+    @property
+    def smtp_from_name(self) -> str:
+        return (self.SMTP_FROM_NAME or self.APP_NAME).strip()
 
     # Rate limiting (in-memory; for multi-instance deployments use Redis-based limiting)
     RATE_LIMIT_ENABLED: bool = True

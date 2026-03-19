@@ -29,6 +29,9 @@ class User(Base):
     role = Column(Enum(UserRole), default=UserRole.USER, nullable=False)
     is_admin = Column(Boolean, default=False, nullable=False)
     status = Column(Enum(UserStatus), default=UserStatus.ACTIVE, nullable=False)
+    email_verified = Column(Boolean, default=False, nullable=False)
+    email_verified_at = Column(DateTime(timezone=True), nullable=True)
+    email_verification_sent_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(
         DateTime(timezone=True),

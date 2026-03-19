@@ -1,10 +1,12 @@
 """
-用户相关 Pydantic 模式
+User-related Pydantic schemas.
 """
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+
 from datetime import datetime
 from enum import Enum
+from typing import Optional
+
+from pydantic import BaseModel, EmailStr, Field
 
 
 class UserRole(str, Enum):
@@ -18,48 +20,69 @@ class UserStatus(str, Enum):
 
 
 class UserCreate(BaseModel):
-    """用户创建"""
-    username: str = Field(..., min_length=3, max_length=50, description="用户名")
-    email: EmailStr = Field(..., description="邮箱")
-    password: str = Field(..., min_length=6, max_length=100, description="密码")
-    wallet_address: Optional[str] = Field(None, max_length=100, description="钱包地址")
+    username: str = Field(..., min_length=3, max_length=50, description="Username")
+    email: EmailStr = Field(..., description="Email address")
+    password: str = Field(..., min_length=6, max_length=100, description="Password")
+    wallet_address: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Wallet address",
+    )
 
 
 class UserLogin(BaseModel):
-    """用户登录"""
-    username: str = Field(..., description="用户名或邮箱")
-    password: str = Field(..., description="密码")
+    username: str = Field(..., description="Username or email")
+    password: str = Field(..., description="Password")
 
 
 class UserUpdate(BaseModel):
-    """用户更新"""
-    username: Optional[str] = Field(None, min_length=3, max_length=50, description="用户名")
-    email: Optional[EmailStr] = Field(None, description="邮箱")
-    wallet_address: Optional[str] = Field(None, max_length=100, description="钱包地址")
+    username: Optional[str] = Field(None, min_length=3, max_length=50, description="Username")
+    email: Optional[EmailStr] = Field(None, description="Email address")
+    wallet_address: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Wallet address",
+    )
 
 
 class UserResponse(BaseModel):
-    """用户响应"""
     id: int
     username: str
     email: str
     wallet_address: Optional[str] = None
     role: UserRole
     status: UserStatus
+    email_verified: bool
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
 
 
+class RegistrationResponse(BaseModel):
+    message: str
+    email: EmailStr
+    requires_email_verification: bool
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(..., min_length=1)
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
 class Token(BaseModel):
-    """访问令牌"""
     access_token: str
     token_type: str = "bearer"
 
 
 class TokenData(BaseModel):
-    """令牌数据"""
     username: Optional[str] = None
     user_id: Optional[int] = None

@@ -45,6 +45,12 @@ async def get_current_user(
             detail="User account is inactive",
         )
 
+    if not getattr(user, "email_verified", True):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email address has not been verified.",
+        )
+
     return user
 
 
