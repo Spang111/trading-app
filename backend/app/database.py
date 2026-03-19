@@ -16,6 +16,10 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
     future=True,
+    # Cloud Run + managed Postgres can hand us stale pooled connections.
+    # Pre-ping drops dead connections before a request tries to use them.
+    pool_pre_ping=True,
+    pool_recycle=1800,
 )
 
 # Session factory
