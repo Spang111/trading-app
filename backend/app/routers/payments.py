@@ -60,9 +60,10 @@ async def create_payment(
 
     await db.refresh(payment)
 
-    payload = PaymentResponse.model_validate(payment).model_dump()
-    payload.update(payment_service.get_manual_payment_details(float(plan.price)))
-    return PaymentResponse(**payload)
+    return PaymentResponse.from_payment(
+        payment,
+        **payment_service.get_manual_payment_details(float(plan.price)),
+    )
 
 
 @router.post("/verify")
@@ -110,7 +111,7 @@ async def get_payment_history(
 ):
     payment_service = PaymentService(db)
     payments = await payment_service.get_user_payments(current_user.id, skip=skip, limit=limit)
-    return payments
+    return [PaymentResponse.from_payment(payment) for payment in payments]
 
 
 @router.get("/admin/pending", response_model=List[PaymentResponse])
@@ -122,7 +123,8 @@ async def get_pending_payments_for_admin(
 ):
     del current_user
     payment_service = PaymentService(db)
-    return await payment_service.get_pending_payments(skip=skip, limit=limit)
+    payments = await payment_service.get_pending_payments(skip=skip, limit=limit)
+    return [PaymentResponse.from_payment(payment) for payment in payments]
 
 
 @router.get("/{payment_id}", response_model=PaymentResponse)
@@ -146,7 +148,7 @@ async def get_payment(
             detail="You are not allowed to view this payment.",
         )
 
-    return payment
+    return PaymentResponse.from_payment(payment)
 
 
 @router.post("/admin/{payment_id}/approve")

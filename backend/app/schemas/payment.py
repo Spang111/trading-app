@@ -47,6 +47,23 @@ class PaymentResponse(BaseModel):
     class Config:
         from_attributes = True
 
+    @classmethod
+    def from_payment(cls, payment, **extra_fields) -> "PaymentResponse":
+        payload = {
+            "id": payment.id,
+            "user_id": payment.user_id,
+            "subscription_id": payment.subscription_id,
+            "amount": payment.amount,
+            "payment_method": getattr(payment.payment_method, "value", payment.payment_method),
+            "tx_hash": payment.tx_hash,
+            "status": getattr(payment.status, "value", payment.status),
+            "paid_at": payment.paid_at,
+            "verified_at": payment.verified_at,
+            "created_at": payment.created_at,
+        }
+        payload.update(extra_fields)
+        return cls(**payload)
+
 
 class NowPaymentsResponse(BaseModel):
     payment_id: int
