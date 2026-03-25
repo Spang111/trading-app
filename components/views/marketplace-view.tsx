@@ -449,10 +449,11 @@ export function MarketplaceView() {
       </section>
 
       {modalOpen && selectedStrategy && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closePaymentModal} />
 
-          <div className="relative w-full max-w-lg animate-in zoom-in-95 rounded-2xl p-8 duration-200 glass-panel neon-glow-cyan fade-in">
+          <div className="relative flex min-h-full items-start justify-center p-4 pt-8 sm:items-center sm:p-6">
+            <div className="relative my-6 w-full max-w-lg max-h-[calc(100vh-3rem)] overflow-y-auto animate-in zoom-in-95 rounded-2xl p-8 duration-200 glass-panel neon-glow-cyan fade-in sm:max-h-[calc(100vh-4rem)]">
             <button
               onClick={closePaymentModal}
               className="absolute right-4 top-4 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
@@ -592,6 +593,7 @@ export function MarketplaceView() {
                 <span>订单创建和 TxHash 提交都已接入真实后端，管理员审核通过后订阅才会正式生效。</span>
               </div>
             </div>
+          </div>
           </div>
         </div>
       )}
