@@ -93,6 +93,8 @@ class Settings(BaseSettings):
     # NowPayments (optional; manual payments can work without it)
     NOWPAYMENTS_API_KEY: Optional[str] = None
     NOWPAYMENTS_API_URL: str = "https://api.nowpayments.io/v1"
+    MANUAL_PAYMENT_ADDRESS: Optional[str] = None
+    MANUAL_PAYMENT_NETWORK: str = "USDT (TRC20)"
 
     # Encryption key for API credentials (optional; kept for future use)
     ENCRYPTION_KEY: Optional[str] = None

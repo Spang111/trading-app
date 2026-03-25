@@ -1,8 +1,8 @@
 """
 Subscription service.
 """
-from datetime import datetime, timedelta
-from datetime import timezone
+
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from sqlalchemy import select
@@ -25,6 +25,8 @@ class SubscriptionService:
         strategy_id: int,
         plan_id: str,
         payment: Payment,
+        *,
+        activate: bool = False,
     ) -> StrategySubscription:
         plan = await self.db.get(SubscriptionPlan, plan_id)
         if not plan:
@@ -32,6 +34,7 @@ class SubscriptionService:
 
         start_date = datetime.now(timezone.utc)
         end_date = start_date + timedelta(days=plan.duration_days)
+        initial_status = SubscriptionStatus.ACTIVE if activate else SubscriptionStatus.PENDING
 
         subscription = StrategySubscription(
             user_id=user_id,
@@ -39,14 +42,16 @@ class SubscriptionService:
             plan_id=plan_id,
             start_date=start_date,
             end_date=end_date,
-            status=SubscriptionStatus.ACTIVE,
+            status=initial_status,
             profit_share_percent=plan.profit_share_percent,
         )
         self.db.add(subscription)
+        await self.db.flush()
 
         payment.subscription_id = subscription.id
-        payment.status = PaymentStatus.SUCCESS
-        payment.paid_at = start_date
+        payment.status = PaymentStatus.SUCCESS if activate else PaymentStatus.PENDING
+        if activate:
+            payment.paid_at = start_date
 
         await self.db.flush()
         await self.db.refresh(subscription)
@@ -66,6 +71,12 @@ class SubscriptionService:
 
         result = await self.db.execute(query)
         return result.scalars().all()
+
+    async def activate(self, subscription: StrategySubscription) -> StrategySubscription:
+        subscription.status = SubscriptionStatus.ACTIVE
+        await self.db.flush()
+        await self.db.refresh(subscription)
+        return subscription
 
     async def cancel(self, subscription: StrategySubscription) -> StrategySubscription:
         subscription.status = SubscriptionStatus.CANCELLED

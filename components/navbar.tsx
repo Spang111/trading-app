@@ -1,20 +1,20 @@
 "use client"
 
-import { Activity, LogOut, Menu, UserRound, X } from "lucide-react"
 import { useEffect, useState } from "react"
+import { Activity, LogOut, Menu, UserRound, X } from "lucide-react"
 
 import { AuthDialog } from "@/components/auth-dialog"
 import { Button } from "@/components/ui/button"
 import { AUTH_TOKEN_STORAGE_KEY, type AuthUser } from "@/lib/auth"
 
-const navItems = [
+const baseNavItems = [
   { key: "home", label: "首页" },
   { key: "marketplace", label: "策略大厅" },
   { key: "dashboard", label: "我的控制台" },
   { key: "docs", label: "接入指南" },
 ] as const
 
-export type ViewKey = (typeof navItems)[number]["key"]
+export type ViewKey = (typeof baseNavItems)[number]["key"] | "admin"
 
 interface NavbarProps {
   activeView: ViewKey
@@ -80,30 +80,42 @@ export function Navbar({ activeView, onViewChange }: NavbarProps) {
     }
   }, [])
 
-  const openAuthDialog = (mode: "login" | "register") => {
+  const visibleNavItems =
+    currentUser?.role === "admin"
+      ? [...baseNavItems, { key: "admin" as const, label: "策略管理" }]
+      : baseNavItems
+
+  function openAuthDialog(mode: "login" | "register") {
     setAuthMode(mode)
     setAuthDialogOpen(true)
     setMobileMenuOpen(false)
   }
 
-  const handleAuthSuccess = ({ token, user }: { token: string; user: AuthUser }) => {
+  function handleAuthSuccess({ token, user }: { token: string; user: AuthUser }) {
     window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token)
     setCurrentUser(user)
     setIsSessionLoading(false)
   }
 
-  const handleLogout = () => {
+  function handleLogout() {
     window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY)
     setCurrentUser(null)
     setMobileMenuOpen(false)
+
+    if (activeView === "admin") {
+      onViewChange("home")
+    }
   }
 
   return (
     <>
-      <nav className="fixed top-0 left-0 right-0 z-50 glass-panel border-b border-border/50">
+      <nav className="fixed left-0 right-0 top-0 z-50 border-b border-border/50 glass-panel">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
-            <button onClick={() => onViewChange("home")} className="group flex items-center gap-2">
+            <button
+              onClick={() => onViewChange("home")}
+              className="group flex items-center gap-2"
+            >
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 neon-glow-cyan">
                 <Activity className="h-5 w-5 text-primary" />
               </div>
@@ -114,7 +126,7 @@ export function Navbar({ activeView, onViewChange }: NavbarProps) {
 
             <div className="hidden items-center gap-4 md:flex">
               <div className="flex items-center gap-1">
-                {navItems.map((item) => (
+                {visibleNavItems.map((item) => (
                   <button
                     key={item.key}
                     onClick={() => onViewChange(item.key)}
@@ -161,7 +173,7 @@ export function Navbar({ activeView, onViewChange }: NavbarProps) {
 
             <button
               className="rounded-lg p-2 text-muted-foreground hover:text-foreground md:hidden"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              onClick={() => setMobileMenuOpen((current) => !current)}
               aria-label={mobileMenuOpen ? "关闭菜单" : "打开菜单"}
             >
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -172,7 +184,7 @@ export function Navbar({ activeView, onViewChange }: NavbarProps) {
         {mobileMenuOpen && (
           <div className="animate-in slide-in-from-top-2 fade-in border-t border-border/50 glass-panel duration-200 md:hidden">
             <div className="flex flex-col gap-1 px-4 py-3">
-              {navItems.map((item) => (
+              {visibleNavItems.map((item) => (
                 <button
                   key={item.key}
                   onClick={() => {

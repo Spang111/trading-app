@@ -1,36 +1,51 @@
 """
-策略服务
+Strategy service helpers.
 """
-from sqlalchemy.ext.asyncio import AsyncSession
+
+from typing import List, Optional
+
 from sqlalchemy import select
-from typing import Optional, List
-from datetime import datetime
-from app.models.strategy import Strategy, SubscriptionPlan, StrategySubscription, StrategyStatus, PlanType, SubscriptionStatus
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.strategy import (
+    PlanType,
+    Strategy,
+    StrategyStatus,
+    SubscriptionPlan,
+)
 from app.schemas.strategy import StrategyCreate, StrategyUpdate, SubscriptionPlanCreate
 
 
 class StrategyService:
-    """策略服务类"""
-    
+    """Strategy service class."""
+
     def __init__(self, db: AsyncSession):
         self.db = db
-    
+
     async def get_by_id(self, strategy_id: int) -> Optional[Strategy]:
-        """通过 ID 获取策略"""
+        """Return a strategy by ID."""
         return await self.db.get(Strategy, strategy_id)
-    
-    async def get_all(self, skip: int = 0, limit: int = 100) -> List[Strategy]:
-        """获取所有策略"""
+
+    async def get_all(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        *,
+        include_inactive: bool = False,
+    ) -> List[Strategy]:
+        """Return strategies for marketplace or admin management."""
+        query = select(Strategy)
+
+        if not include_inactive:
+            query = query.where(Strategy.status == StrategyStatus.ACTIVE)
+
         result = await self.db.execute(
-            select(Strategy)
-            .where(Strategy.status == StrategyStatus.ACTIVE)
-            .offset(skip)
-            .limit(limit)
+            query.order_by(Strategy.created_at.desc()).offset(skip).limit(limit)
         )
         return result.scalars().all()
-    
+
     async def create(self, strategy_in: StrategyCreate) -> Strategy:
-        """创建策略"""
+        """Create a strategy and its default plans."""
         strategy = Strategy(
             name=strategy_in.name,
             description=strategy_in.description,
@@ -44,34 +59,33 @@ class StrategyService:
         self.db.add(strategy)
         await self.db.flush()
         await self.db.refresh(strategy)
-        
-        # 创建默认的订阅套餐
+
         await self._create_default_plans(strategy)
-        
+
         return strategy
-    
+
     async def update(self, strategy: Strategy, strategy_in: StrategyUpdate) -> Strategy:
-        """更新策略"""
+        """Update a strategy in place."""
         update_data = strategy_in.model_dump(exclude_unset=True)
-        
+
         for field, value in update_data.items():
             setattr(strategy, field, value)
-        
+
         await self.db.flush()
         await self.db.refresh(strategy)
         return strategy
-    
+
     async def get_plans(self, strategy_id: int) -> List[SubscriptionPlan]:
-        """获取策略的订阅套餐"""
+        """Return active plans for a strategy."""
         result = await self.db.execute(
             select(SubscriptionPlan)
             .where(SubscriptionPlan.strategy_id == strategy_id)
-            .where(SubscriptionPlan.is_active == True)
+            .where(SubscriptionPlan.is_active.is_(True))
         )
         return result.scalars().all()
-    
+
     async def create_plan(self, plan_in: SubscriptionPlanCreate) -> SubscriptionPlan:
-        """创建订阅套餐"""
+        """Create a subscription plan."""
         plan = SubscriptionPlan(
             strategy_id=plan_in.strategy_id,
             plan_type=plan_in.plan_type,
@@ -84,32 +98,30 @@ class StrategyService:
         await self.db.flush()
         await self.db.refresh(plan)
         return plan
-    
-    async def _create_default_plans(self, strategy: Strategy):
-        """创建默认订阅套餐"""
-        # 月套餐
+
+    async def _create_default_plans(self, strategy: Strategy) -> None:
+        """Create monthly and yearly plans after a strategy is created."""
         monthly_plan = SubscriptionPlan(
             strategy_id=strategy.id,
             plan_type=PlanType.MONTHLY,
             price=strategy.monthly_price,
             duration_days=30,
             profit_share_percent=0,
-            description=f"{strategy.name} - 月度订阅",
+            description=f"{strategy.name} - monthly subscription",
         )
-        
-        # 年套餐
+
         yearly_plan = SubscriptionPlan(
             strategy_id=strategy.id,
             plan_type=PlanType.YEARLY,
             price=strategy.yearly_price,
             duration_days=365,
-            profit_share_percent=5.00,  # 年套餐赠送 5% 分润
-            description=f"{strategy.name} - 年度订阅",
+            profit_share_percent=5.00,
+            description=f"{strategy.name} - yearly subscription",
         )
-        
+
         self.db.add_all([monthly_plan, yearly_plan])
         await self.db.flush()
-    
+
     async def get_plan_by_id(self, plan_id: str) -> Optional[SubscriptionPlan]:
-        """通过 ID 获取套餐"""
+        """Return a plan by ID."""
         return await self.db.get(SubscriptionPlan, plan_id)

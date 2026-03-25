@@ -1,4 +1,4 @@
-const DEFAULT_BACKEND_API_URL = "https://backend-fvqh25mlwq-as.a.run.app"
+const DEFAULT_BACKEND_API_URL = "https://backend-766691451715.asia-southeast1.run.app"
 
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, "")

@@ -1,17 +1,21 @@
 """
-支付路由
+Payment routes.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.database import get_db
-from app.services.payment_service import PaymentService
-from app.services.subscription_service import SubscriptionService
-from app.services.strategy_service import StrategyService
-from app.schemas.payment import PaymentCreate, PaymentResponse, PaymentVerify
-from app.dependencies import get_current_user, get_current_admin_user
-from app.models.user import User
+from app.dependencies import get_current_admin_user, get_current_user
 from app.models.payment import PaymentStatus
+from app.models.user import User
+from app.schemas.payment import PaymentCreate, PaymentResponse, PaymentVerify
+from app.services.payment_service import PaymentService
+from app.services.strategy_service import StrategyService
+from app.services.subscription_service import SubscriptionService
+
 
 router = APIRouter()
 
@@ -20,71 +24,81 @@ router = APIRouter()
 async def create_payment(
     payment_in: PaymentCreate,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    """创建支付订单"""
+    """Create a pending payment and a pending subscription."""
     payment_service = PaymentService(db)
     strategy_service = StrategyService(db)
-    
-    # 验证策略是否存在
+    subscription_service = SubscriptionService(db)
+
     strategy = await strategy_service.get_by_id(payment_in.strategy_id)
     if not strategy:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="策略不存在"
+            detail="Strategy not found.",
         )
-    
-    # 获取套餐价格
+
     plans = await strategy_service.get_plans(payment_in.strategy_id)
-    plan = next((p for p in plans if p.plan_type.value == payment_in.plan_type), None)
-    
+    plan = next((item for item in plans if item.plan_type.value == payment_in.plan_type), None)
     if not plan:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="套餐不存在"
+            detail="Subscription plan not found.",
         )
-    
-    # 创建支付记录（人工审核模式）
+
     payment = await payment_service.create(current_user.id, payment_in)
     payment.amount = plan.price
-    
     await db.flush()
+
+    await subscription_service.create(
+        current_user.id,
+        payment_in.strategy_id,
+        plan.id,
+        payment,
+        activate=False,
+    )
+
     await db.refresh(payment)
-    
-    return payment
+
+    payload = PaymentResponse.model_validate(payment).model_dump()
+    payload.update(payment_service.get_manual_payment_details(float(plan.price)))
+    return PaymentResponse(**payload)
 
 
 @router.post("/verify")
 async def verify_payment(
     payment_verify: PaymentVerify,
-    payment_id: str,
+    payment_id: str = Query(..., description="Payment ID"),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    """提交 TxHash 验证（人工审核模式）"""
+    """Submit a TxHash for manual review."""
     payment_service = PaymentService(db)
-    
+
     payment = await payment_service.get_by_id(payment_id)
     if not payment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="支付记录不存在"
+            detail="Payment record not found.",
         )
-    
+
     if payment.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="无权操作此支付记录"
+            detail="You are not allowed to update this payment.",
         )
-    
-    # 更新支付记录
+
     payment = await payment_service.update_status(
-        payment, 
+        payment,
         PaymentStatus.PENDING,
-        tx_hash=payment_verify.tx_hash
+        tx_hash=payment_verify.tx_hash,
     )
-    
-    return {"message": "已提交审核，管理员确认后即可激活订阅"}
+
+    return {
+        "message": "TxHash submitted. Your payment is now waiting for admin review.",
+        "payment_id": payment.id,
+        "subscription_id": payment.subscription_id,
+    }
 
 
 @router.get("/history", response_model=List[PaymentResponse])
@@ -92,40 +106,46 @@ async def get_payment_history(
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    """获取支付历史"""
     payment_service = PaymentService(db)
-    payments = await payment_service.get_user_payments(
-        current_user.id, 
-        skip=skip, 
-        limit=limit
-    )
+    payments = await payment_service.get_user_payments(current_user.id, skip=skip, limit=limit)
     return payments
+
+
+@router.get("/admin/pending", response_model=List[PaymentResponse])
+async def get_pending_payments_for_admin(
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    del current_user
+    payment_service = PaymentService(db)
+    return await payment_service.get_pending_payments(skip=skip, limit=limit)
 
 
 @router.get("/{payment_id}", response_model=PaymentResponse)
 async def get_payment(
     payment_id: str,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    """获取支付详情"""
     payment_service = PaymentService(db)
     payment = await payment_service.get_by_id(payment_id)
-    
+
     if not payment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="支付记录不存在"
+            detail="Payment record not found.",
         )
-    
+
     if payment.user_id != current_user.id and current_user.role.value != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="无权查看此支付记录"
+            detail="You are not allowed to view this payment.",
         )
-    
+
     return payment
 
 
@@ -133,31 +153,27 @@ async def get_payment(
 async def approve_payment(
     payment_id: str,
     current_user: User = Depends(get_current_admin_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    """审核通过支付（管理员）"""
     payment_service = PaymentService(db)
     subscription_service = SubscriptionService(db)
-    
+
     payment = await payment_service.get_by_id(payment_id)
     if not payment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="支付记录不存在"
+            detail="Payment record not found.",
         )
-    
-    # 验证支付
+
     payment = await payment_service.verify_payment(
-        payment, 
+        payment,
         tx_hash=payment.tx_hash or "manual_approved",
-        admin_user_id=current_user.id
+        admin_user_id=current_user.id,
     )
-    
-    # 如果有订阅 ID，激活订阅
+
     if payment.subscription_id:
         subscription = await subscription_service.get_by_id(payment.subscription_id)
         if subscription:
-            subscription.status = "active"
-            await db.flush()
-    
-    return {"message": "支付已审核通过"}
+            await subscription_service.activate(subscription)
+
+    return {"message": "Payment approved and subscription activated."}

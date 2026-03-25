@@ -40,6 +40,9 @@ class PaymentResponse(BaseModel):
     paid_at: Optional[datetime] = None
     verified_at: Optional[datetime] = None
     created_at: datetime
+    pay_address: Optional[str] = None
+    payment_network: Optional[str] = None
+    payment_note: Optional[str] = None
 
     class Config:
         from_attributes = True

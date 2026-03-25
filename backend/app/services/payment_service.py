@@ -1,8 +1,8 @@
 """
 Payment service.
 """
-from datetime import datetime
-from datetime import timezone
+
+from datetime import datetime, timezone
 from typing import List, Optional
 
 import httpx
@@ -64,6 +64,16 @@ class PaymentService:
         )
         return result.scalars().all()
 
+    async def get_pending_payments(self, skip: int = 0, limit: int = 100) -> List[Payment]:
+        result = await self.db.execute(
+            select(Payment)
+            .where(Payment.status == PaymentStatus.PENDING)
+            .order_by(Payment.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return result.scalars().all()
+
     async def verify_payment(self, payment: Payment, tx_hash: str, admin_user_id: int) -> Payment:
         payment.tx_hash = tx_hash
         payment.verified_by = admin_user_id
@@ -99,8 +109,13 @@ class PaymentService:
                 )
                 return response.json()
             except Exception:
-                return {
-                    "payment_method": "manual",
-                    "pay_address": "your_usdt_trc20_address",
-                    "pay_amount": amount,
-                }
+                return self.get_manual_payment_details(amount)
+
+    def get_manual_payment_details(self, amount: float) -> dict:
+        return {
+            "payment_method": "manual",
+            "pay_address": settings.MANUAL_PAYMENT_ADDRESS,
+            "payment_network": settings.MANUAL_PAYMENT_NETWORK,
+            "pay_amount": amount,
+            "payment_note": "Pay the exact amount, then submit the TxHash for admin review.",
+        }
