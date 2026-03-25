@@ -1,9 +1,10 @@
 "use client"
 
+import { Suspense, useEffect, useState } from "react"
+
 import { CheckCircle2, Loader2, MailWarning, RefreshCcw } from "lucide-react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 
@@ -27,7 +28,7 @@ function translateMessage(message: string) {
   return dictionary[message] ?? message
 }
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const searchParams = useSearchParams()
   const token = searchParams.get("token")
   const [state, setState] = useState<VerifyState>("loading")
@@ -122,5 +123,27 @@ export default function VerifyEmailPage() {
         </div>
       </section>
     </main>
+  )
+}
+
+function VerifyEmailFallback() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-16">
+      <section className="w-full max-w-lg rounded-3xl border border-border/60 bg-card/90 p-8 text-center shadow-2xl">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+        <h1 className="text-3xl font-semibold text-foreground">正在加载验证页面</h1>
+        <p className="mt-4 text-sm leading-7 text-muted-foreground">请稍候...</p>
+      </section>
+    </main>
+  )
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={<VerifyEmailFallback />}>
+      <VerifyEmailContent />
+    </Suspense>
   )
 }

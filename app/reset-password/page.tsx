@@ -1,9 +1,10 @@
 "use client"
 
+import { Suspense, useState, type FormEvent } from "react"
+
 import { CheckCircle2, Loader2, MailWarning, RefreshCcw } from "lucide-react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,7 +19,7 @@ type MessageResponse = {
 
 function translateMessage(message: string) {
   const dictionary: Record<string, string> = {
-    "Password reset successful. You can log in now.": "密码重置成功，现在可以直接登录。",
+    "Password reset successful. You can log in now.": "密码重置成功，现在可以直接登录了。",
     "Invalid or expired password reset link.": "重置密码链接无效或已过期。",
     "This password reset link has already been used or is no longer valid.":
       "这个重置密码链接已经使用过，或已失效。",
@@ -27,7 +28,7 @@ function translateMessage(message: string) {
   return dictionary[message] ?? message
 }
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const searchParams = useSearchParams()
   const token = searchParams.get("token")
   const [password, setPassword] = useState("")
@@ -35,7 +36,7 @@ export default function ResetPasswordPage() {
   const [state, setState] = useState<SubmitState>("idle")
   const [message, setMessage] = useState("请输入你的新密码。")
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
     if (!token) {
@@ -149,5 +150,27 @@ export default function ResetPasswordPage() {
         </div>
       </section>
     </main>
+  )
+}
+
+function ResetPasswordFallback() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-16">
+      <section className="w-full max-w-lg rounded-3xl border border-border/60 bg-card/90 p-8 text-center shadow-2xl">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+        <h1 className="text-3xl font-semibold text-foreground">正在加载重置页面</h1>
+        <p className="mt-4 text-sm leading-7 text-muted-foreground">请稍候...</p>
+      </section>
+    </main>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<ResetPasswordFallback />}>
+      <ResetPasswordContent />
+    </Suspense>
   )
 }
