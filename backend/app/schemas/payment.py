@@ -61,7 +61,11 @@ class PaymentResponse(BaseModel):
             "verified_at": payment.verified_at,
             "created_at": payment.created_at,
         }
-        payload.update(extra_fields)
+
+        for key in ("pay_address", "payment_network", "payment_note"):
+            if key in extra_fields:
+                payload[key] = extra_fields[key]
+
         return cls(**payload)
 
 
