@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
 import {
   BarChart3,
   ClipboardCheck,
@@ -130,6 +131,11 @@ export function MarketplaceView() {
   const [paymentSuccess, setPaymentSuccess] = useState<string | null>(null)
   const [isCreatingOrder, setIsCreatingOrder] = useState(false)
   const [isSubmittingTxHash, setIsSubmittingTxHash] = useState(false)
+  const [portalReady, setPortalReady] = useState(false)
+
+  useEffect(() => {
+    setPortalReady(true)
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -448,7 +454,7 @@ export function MarketplaceView() {
         </div>
       </section>
 
-      {modalOpen && selectedStrategy && (
+      {portalReady && modalOpen && selectedStrategy && createPortal(
         <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closePaymentModal} />
 
@@ -595,7 +601,8 @@ export function MarketplaceView() {
             </div>
           </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
