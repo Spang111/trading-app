@@ -436,4 +436,4 @@ async def reset_password_form(
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: User = Depends(get_current_user)):
-    return current_user
+    return UserResponse.from_user(current_user)

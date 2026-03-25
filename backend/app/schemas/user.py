@@ -59,6 +59,20 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+    @classmethod
+    def from_user(cls, user) -> "UserResponse":
+        return cls(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            wallet_address=user.wallet_address,
+            role=getattr(user.role, "value", user.role),
+            status=getattr(user.status, "value", user.status),
+            email_verified=bool(getattr(user, "email_verified", False)),
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+        )
+
 
 class RegistrationResponse(BaseModel):
     message: str
