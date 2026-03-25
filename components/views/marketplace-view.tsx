@@ -358,7 +358,7 @@ export function MarketplaceView() {
         </div>
       </section>
 
-      <section className="pb-24">
+      <section className="pb-40 md:pb-52">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           {loadError && (
             <div className="mb-6 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-100">
@@ -449,11 +449,11 @@ export function MarketplaceView() {
       </section>
 
       {modalOpen && selectedStrategy && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closePaymentModal} />
 
-          <div className="relative flex min-h-full items-start justify-center p-4 pt-8 sm:items-center sm:p-6">
-            <div className="relative my-6 w-full max-w-lg max-h-[calc(100vh-3rem)] overflow-y-auto animate-in zoom-in-95 rounded-2xl p-8 duration-200 glass-panel neon-glow-cyan fade-in sm:max-h-[calc(100vh-4rem)]">
+          <div className="relative flex min-h-screen items-center justify-center px-4 py-8 sm:px-6 sm:py-12">
+            <div className="relative w-full max-w-lg max-h-[calc(100vh-6rem)] overflow-y-auto overscroll-contain animate-in zoom-in-95 rounded-2xl p-8 duration-200 glass-panel neon-glow-cyan fade-in sm:max-h-[calc(100vh-8rem)]">
             <button
               onClick={closePaymentModal}
               className="absolute right-4 top-4 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
