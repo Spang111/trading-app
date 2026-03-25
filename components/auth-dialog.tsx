@@ -28,6 +28,7 @@ type AuthDialogProps = {
 type LoginResponse = {
   access_token: string
   token_type: string
+  user: AuthUser
 }
 
 type RegistrationResponse = {
@@ -38,7 +39,7 @@ type RegistrationResponse = {
 
 type MessageResponse = {
   message?: string
-  detail?: string
+  detail?: string | Array<{ msg?: string }>
 }
 
 const INITIAL_REGISTER_FORM = {
@@ -89,11 +90,27 @@ function translateBackendMessage(message: string) {
 async function readResponseMessage(response: Response) {
   try {
     const data = (await response.json()) as MessageResponse
-    return translateBackendMessage(
-      data.detail || data.message || `Request failed with status ${response.status}`,
-    )
+
+    if (typeof data.detail === "string" && data.detail) {
+      return translateBackendMessage(data.detail)
+    }
+
+    if (Array.isArray(data.detail) && data.detail.length > 0) {
+      const messages = data.detail
+        .map((item) => item?.msg?.trim())
+        .filter((value): value is string => Boolean(value))
+      if (messages.length > 0) {
+        return messages.join("；")
+      }
+    }
+
+    if (data.message) {
+      return translateBackendMessage(data.message)
+    }
+
+    return `请求失败，状态码 ${response.status}`
   } catch {
-    return `Request failed with status ${response.status}`
+    return `请求失败，状态码 ${response.status}`
   }
 }
 
@@ -145,22 +162,6 @@ export function AuthDialog({
       ? "登录后可以查看订阅、策略和个人控制台。"
       : "注册后请根据系统提示完成账号验证，再开始使用。"
 
-  async function fetchCurrentUser(token: string) {
-    const response = await fetch("/api/auth/me", {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: "no-store",
-    })
-
-    if (!response.ok) {
-      throw new Error(await readResponseMessage(response))
-    }
-
-    return (await response.json()) as AuthUser
-  }
-
   async function handleLoginSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setFormError(null)
@@ -186,9 +187,11 @@ export function AuthDialog({
       }
 
       const loginPayload = (await loginResponse.json()) as LoginResponse
-      const user = await fetchCurrentUser(loginPayload.access_token)
 
-      onAuthSuccess({ token: loginPayload.access_token, user })
+      onAuthSuccess({
+        token: loginPayload.access_token,
+        user: loginPayload.user,
+      })
       setFormSuccess("登录成功。")
       onOpenChange(false)
     } catch (error) {
@@ -260,9 +263,11 @@ export function AuthDialog({
       }
 
       const loginPayload = (await loginResponse.json()) as LoginResponse
-      const user = await fetchCurrentUser(loginPayload.access_token)
 
-      onAuthSuccess({ token: loginPayload.access_token, user })
+      onAuthSuccess({
+        token: loginPayload.access_token,
+        user: loginPayload.user,
+      })
       setFormSuccess("注册成功，已自动登录。")
       onOpenChange(false)
     } catch (error) {

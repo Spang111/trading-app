@@ -15,12 +15,12 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.user import (
+    AuthSessionResponse,
     ForgotPasswordRequest,
     MessageResponse,
     RegistrationResponse,
     ResendVerificationRequest,
     ResetPasswordRequest,
-    Token,
     UserCreate,
     UserResponse,
     VerifyEmailRequest,
@@ -297,7 +297,7 @@ async def register(
     )
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=AuthSessionResponse)
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
@@ -329,7 +329,11 @@ async def login(
         expires_delta=access_token_expires,
     )
 
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": UserResponse.from_user(user),
+    }
 
 
 @router.post("/resend-verification", response_model=MessageResponse)
