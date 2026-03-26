@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Activity, LogOut, Menu, UserRound, X } from "lucide-react"
+import { Activity, Check, Copy, LogOut, Menu, UserRound, X } from "lucide-react"
 
 import { AuthDialog } from "@/components/auth-dialog"
 import { Button } from "@/components/ui/button"
@@ -21,12 +21,28 @@ interface NavbarProps {
   onViewChange: (view: ViewKey) => void
 }
 
+const DEFAULT_CONTRACT_ADDRESS = "0xeccbb861c0dda7efd964010085488b69317e4444"
+const contractAddress =
+  process.env.NEXT_PUBLIC_CONTRACT_ADDRESS?.trim() || DEFAULT_CONTRACT_ADDRESS
+const contractDisplayText = `CA:${contractAddress}`
+
+function formatContractAddress(address: string) {
+  const prefixedAddress = `CA:${address}`
+
+  if (prefixedAddress.length <= 30) {
+    return prefixedAddress
+  }
+
+  return `${prefixedAddress.slice(0, 13)}...${prefixedAddress.slice(-8)}`
+}
+
 export function Navbar({ activeView, onViewChange }: NavbarProps) {
   const [authDialogOpen, setAuthDialogOpen] = useState(false)
   const [authMode, setAuthMode] = useState<"login" | "register">("login")
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
   const [isSessionLoading, setIsSessionLoading] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [contractCopied, setContractCopied] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -107,14 +123,36 @@ export function Navbar({ activeView, onViewChange }: NavbarProps) {
     }
   }
 
+  async function handleCopyContractAddress() {
+    if (!contractAddress) {
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(contractAddress)
+      setContractCopied(true)
+      window.setTimeout(() => setContractCopied(false), 1800)
+    } catch {
+      setContractCopied(false)
+    }
+  }
+
+  const contractText = formatContractAddress(contractAddress)
+  const contractButtonLabel = contractCopied ? "已复制" : "复制"
+  const contractButtonIcon = contractCopied ? (
+    <Check className="h-3.5 w-3.5" />
+  ) : (
+    <Copy className="h-3.5 w-3.5" />
+  )
+
   return (
     <>
       <nav className="fixed left-0 right-0 top-0 z-50 border-b border-border/50 glass-panel">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
+          <div className="flex h-16 items-center gap-4 lg:gap-6">
             <button
               onClick={() => onViewChange("home")}
-              className="group flex items-center gap-2"
+              className="group flex shrink-0 items-center gap-2"
             >
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 neon-glow-cyan">
                 <Activity className="h-5 w-5 text-primary" />
@@ -124,7 +162,24 @@ export function Navbar({ activeView, onViewChange }: NavbarProps) {
               </span>
             </button>
 
-            <div className="hidden items-center gap-4 md:flex">
+            <div className="hidden min-w-0 flex-1 justify-center lg:flex">
+              <div className="flex w-full max-w-[32rem] items-center gap-3 rounded-xl border border-primary/15 bg-background/70 px-4 py-2 text-sm shadow-[0_0_24px_rgba(0,229,255,0.05)] backdrop-blur">
+                <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-[11px] font-medium tracking-[0.08em] text-foreground/90 xl:text-xs">
+                  {contractDisplayText}
+                </code>
+                <button
+                  type="button"
+                  onClick={handleCopyContractAddress}
+                  disabled={!contractAddress}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border/60 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {contractButtonIcon}
+                  <span>{contractButtonLabel}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="hidden items-center gap-4 md:ml-auto md:flex">
               <div className="flex items-center gap-1">
                 {visibleNavItems.map((item) => (
                   <button
@@ -178,6 +233,23 @@ export function Navbar({ activeView, onViewChange }: NavbarProps) {
             >
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
+          </div>
+
+          <div className="border-t border-border/50 py-2.5 lg:hidden">
+            <div className="flex items-center gap-2 rounded-xl border border-primary/15 bg-background/70 px-3 py-2 text-xs shadow-[0_0_20px_rgba(0,229,255,0.04)] backdrop-blur">
+              <code className="min-w-0 flex-1 truncate text-[11px] font-medium tracking-[0.08em] text-foreground/90">
+                {contractText}
+              </code>
+              <button
+                type="button"
+                onClick={handleCopyContractAddress}
+                disabled={!contractAddress}
+                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/60 px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {contractButtonIcon}
+                <span>{contractButtonLabel}</span>
+              </button>
+            </div>
           </div>
         </div>
 

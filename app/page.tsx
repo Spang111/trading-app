@@ -17,7 +17,7 @@ export default function Page() {
     <div className="min-h-screen bg-background">
       <Navbar activeView={activeView} onViewChange={setActiveView} />
 
-      <main className="pt-16">
+      <main className="pt-28 lg:pt-16">
         <div key={activeView} className="animate-in fade-in duration-300">
           {activeView === "home" && <HomeView onViewChange={setActiveView} />}
           {activeView === "marketplace" && <MarketplaceView />}
